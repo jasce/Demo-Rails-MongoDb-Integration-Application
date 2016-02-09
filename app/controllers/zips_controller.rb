@@ -3,14 +3,22 @@ class ZipsController < ApplicationController
 
   # GET /zips
   # GET /zips.json
-    def index
+  def index
     #@zips = Zip.all
-    @zips = Zip.paginate(:page => params[:page])
-  end    
+    #@zips = Zip.paginate(params)
+
+    args=params.clone                      #update a clone of params
+    args[:sort]=get_sort_hash(args[:sort]) #replace sort with hash
+    @zips = Zip.paginate(args)
+    @locations = zip_markers @zips
+  end
 
   # GET /zips/1
   # GET /zips/1.json
   def show
+    near_zips=@zip.near(params[:max_miles], params[:min_miles] ,params[:limit])
+    @locations=zip_markers near_zips
+    p @locations
   end
 
   # GET /zips/new
@@ -71,5 +79,51 @@ class ZipsController < ApplicationController
     # Never trust parameters from the scary internet, only allow the white list through.
     def zip_params
       params.require(:zip).permit(:id, :city, :state, :population)
+    end
+
+    #create a hash sort spec from query param
+    #sort=state:1,city,population:-1
+    #{state:1, city:1, population:-1}
+    def get_sort_hash(sort)
+      order={}
+      if (!sort.nil?)
+        sort.split(",").each do |term|
+          args=term.split(":")
+          dir = args.length<2 || args[1].to_i >= 0 ? 1 : -1
+          order[args[0]] = dir
+        end
+      end
+      return order
+    end
+
+    def zip_markers zips
+      #build the marker for the center of the map
+      if @zip
+        center_marker = Gmaps4rails.build_markers(@zip) do |zip, marker|
+          marker.lat zip.latitude
+          marker.lng zip.longitude
+          marker.infowindow zip.city
+          marker.picture(:url=> "/images/marker32.png",
+                         :width=>  32,
+                         :height=> 32)
+        end
+      end
+
+      #build markers for map
+      marked_zip=@zip.nil?
+      locations = Gmaps4rails.build_markers(zips) do |zip, marker|
+        marker.lat zip.latitude
+        marker.lng zip.longitude
+        marker.infowindow zip.city
+        #add special marker for target city
+        if @zip && zip.id==@zip.id
+          marker.picture center_marker[0][:picture]
+          marked_zip=true
+        end
+      end
+
+      #add target city of left out
+      locations << center_marker[0]  if !marked_zip
+      return locations
     end
 end

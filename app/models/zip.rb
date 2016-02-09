@@ -1,21 +1,28 @@
 class Zip
   include ActiveModel::Model
 
-  attr_accessor :id, :city, :state, :population
+  attr_accessor :id, :city, :state, :population,:longitude, :latitude
 
   def to_s
     "#{@id}: #{@city}, #{@state}, pop=#{@population}"
   end
 
   # initialize from both a Mongo and Web hash
-  def initialize(params={})
+   def initialize(params={})
+    Rails.logger.debug("instantiating Zip (#{params})")
     #switch between both internal and external views of id and population
     @id=params[:_id].nil? ? params[:id] : params[:_id]
     @city=params[:city]
     @state=params[:state]
     @population=params[:pop].nil? ? params[:population] : params[:pop]
+    if params[:loc]
+      @longitude=params[:loc][0]
+      @latitude=params[:loc][1]
+    else 
+      @longitude=params[:longitude]
+      @latitude=params[:latitude]
+    end
   end
-
   # tell Rails whether this instance is persisted
   def persisted?
     !@id.nil?
@@ -26,7 +33,8 @@ class Zip
   def updated_at
     nil
   end
-
+  
+  
   # convenience method for access to client in console
   def self.mongo_client
    Mongoid::Clients.default
@@ -136,4 +144,28 @@ class Zip
               .find(_id:@id)
               .delete_one   
   end  
+
+   def near(max_miles, min_miles, limit)
+    max_miles=max_miles.nil? ? 1000 : max_miles.to_i
+    min_miles=min_miles.nil? ? 0 : min_miles.to_i
+    limit=limit.nil? ? 5 : limit.to_i
+    limit+=1   if min_miles==0 
+
+    #convert miles to meters
+    miles_to_meters=1609.34
+    min_meters=min_miles.to_i*miles_to_meters
+    max_meters=max_miles.to_i*miles_to_meters
+
+    #execute a 2dsphere location find
+    near_zips=[]
+    self.class.collection.find(
+        :loc=>{:$near=>{
+          :$geometry=>{:type=>"Point",:coordinates=>[@longitude,@latitude]}, 
+          :$minDistance=>min_meters,
+          :$maxDistance=>max_meters}}
+        ).limit(limit).each do |z|
+      near_zips << Zip.new(z)
+    end
+    near_zips
+  end
 end
