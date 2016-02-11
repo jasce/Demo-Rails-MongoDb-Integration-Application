@@ -10,16 +10,15 @@ class ZipsController < ApplicationController
     args=params.clone                      #update a clone of params
     args[:sort]=get_sort_hash(args[:sort]) #replace sort with hash
     @zips = Zip.paginate(args)
-    @locations = zip_markers @zips
+  
   end
 
   # GET /zips/1
   # GET /zips/1.json
   def show
-    near_zips=@zip.near(params[:max_miles], params[:min_miles] ,params[:limit])
-    @locations=zip_markers near_zips
-    p @locations
-  end
+  near_zips=@zip.near(params[:max_miles], params[:min_miles] ,params[:limit])
+  @locations=zip_markers near_zips
+end
 
   # GET /zips/new
   def new
@@ -96,34 +95,4 @@ class ZipsController < ApplicationController
       return order
     end
 
-    def zip_markers zips
-      #build the marker for the center of the map
-      if @zip
-        center_marker = Gmaps4rails.build_markers(@zip) do |zip, marker|
-          marker.lat zip.latitude
-          marker.lng zip.longitude
-          marker.infowindow zip.city
-          marker.picture(:url=> "/images/marker32.png",
-                         :width=>  32,
-                         :height=> 32)
-        end
-      end
-
-      #build markers for map
-      marked_zip=@zip.nil?
-      locations = Gmaps4rails.build_markers(zips) do |zip, marker|
-        marker.lat zip.latitude
-        marker.lng zip.longitude
-        marker.infowindow zip.city
-        #add special marker for target city
-        if @zip && zip.id==@zip.id
-          marker.picture center_marker[0][:picture]
-          marked_zip=true
-        end
-      end
-
-      #add target city of left out
-      locations << center_marker[0]  if !marked_zip
-      return locations
-    end
 end

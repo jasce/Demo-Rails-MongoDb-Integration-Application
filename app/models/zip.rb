@@ -67,7 +67,7 @@ class Zip
     Rails.logger.debug {"getting all zips, prototype=#{prototype}, sort=#{sort}, offset=#{offset}, limit=#{limit}"}
 
     result=collection.find(prototype)
-          .projection({_id:true, city:true, state:true, pop:true})
+          .projection({_id:true, city:true, state:true, pop:true, loc:true})
           .sort(sort)
           .skip(offset)
     result=result.limit(limit) if !limit.nil?
@@ -110,7 +110,7 @@ class Zip
     Rails.logger.debug {"getting zip #{id}"}
 
     doc=collection.find(:_id=>id)
-                  .projection({_id:true, city:true, state:true, pop:true})
+                  .projection({_id:true, city:true, state:true, pop:true, loc:true})
                   .first
     return doc.nil? ? nil : Zip.new(doc)
   end 
@@ -145,27 +145,28 @@ class Zip
               .delete_one   
   end  
 
-   def near(max_miles, min_miles, limit)
-    max_miles=max_miles.nil? ? 1000 : max_miles.to_i
-    min_miles=min_miles.nil? ? 0 : min_miles.to_i
-    limit=limit.nil? ? 5 : limit.to_i
-    limit+=1   if min_miles==0 
+   #return a list of zipcodes within min/max miles
+def near(max_miles, min_miles, limit)
+  max_miles=max_miles.nil? ? 1000 : max_miles.to_i
+  min_miles=min_miles.nil? ? 0 : min_miles.to_i
+  limit=limit.nil? ? 5 : limit.to_i
+  limit+=1   if min_miles==0 
 
-    #convert miles to meters
-    miles_to_meters=1609.34
-    min_meters=min_miles.to_i*miles_to_meters
-    max_meters=max_miles.to_i*miles_to_meters
+  #convert miles to meters
+  miles_to_meters=1609.34
+  min_meters=min_miles.to_i*miles_to_meters
+  max_meters=max_miles.to_i*miles_to_meters
 
-    #execute a 2dsphere location find
-    near_zips=[]
-    self.class.collection.find(
-        :loc=>{:$near=>{
-          :$geometry=>{:type=>"Point",:coordinates=>[@longitude,@latitude]}, 
-          :$minDistance=>min_meters,
-          :$maxDistance=>max_meters}}
-        ).limit(limit).each do |z|
-      near_zips << Zip.new(z)
-    end
-    near_zips
+  #execute a 2dsphere location find
+  near_zips=[]
+  self.class.collection.find(
+      :loc=>{:$near=>{
+        :$geometry=>{:type=>"Point",:coordinates=>[@longitude,@latitude]}, 
+        :$minDistance=>min_meters,
+        :$maxDistance=>max_meters}}
+      ).limit(limit).each do |z|
+    near_zips << Zip.new(z)
   end
+  near_zips
+end
 end
